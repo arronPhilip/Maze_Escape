@@ -2,7 +2,7 @@
 
 A browser game where you race to the exit of a randomly generated maze while an AI guard hunts you down using the shortest path.
 
-**Play it:** https://arronPhilip.github.io/maze-escape/
+**Play it:** https://arronPhilip.github.io/Maze_Escape/
 
 ## Features
 
