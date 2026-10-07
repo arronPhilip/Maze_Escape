@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maze Escape</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Inter:wght@400;600&display=swap">
+<style>
+:root{--bg:#e9eef3;--ink:#14222f;--mute:#5b6b7a;--wall:#27435f;--floor:#f7fafc;--player:#f2a007;--guard:#d93a4a;--exit:#13a874;--route:rgba(217,58,74,.35);--card:#fff;--line:#c9d4de;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101c29;--ink:#e8eff6;--mute:#8fa3b6;--wall:#3b5f84;--floor:#0b1520;--player:#ffb627;--guard:#ff5a6a;--exit:#2fd9a0;--route:rgba(255,90,106,.35);--card:#172636;--line:#26394d}}
+:root[data-theme="dark"]{--bg:#101c29;--ink:#e8eff6;--mute:#8fa3b6;--wall:#3b5f84;--floor:#0b1520;--player:#ffb627;--guard:#ff5a6a;--exit:#2fd9a0;--route:rgba(255,90,106,.35);--card:#172636;--line:#26394d}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif}
+main{max-width:660px;margin:0 auto;padding:20px 16px 28px}
+h1{font-family:'Bricolage Grotesque',Inter,sans-serif;font-weight:800;font-size:clamp(34px,8vw,52px);line-height:1;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 18px;line-height:1.5;max-width:52ch}
+.bar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:end;margin-bottom:14px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute);font-weight:600}
+input[type=range]{width:150px;accent-color:var(--wall)}
+select,button{font:inherit;font-size:14px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{cursor:pointer;font-weight:600}
+button.go{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--player);outline-offset:2px}
+.stats{display:flex;gap:22px;margin:0 0 10px;font-size:15px}
+.stats b{font-family:'Bricolage Grotesque',Inter,sans-serif;font-size:22px}
+.wrap{position:relative;width:100%;touch-action:none}
+canvas{display:block;width:100%;border-radius:10px;border:1px solid var(--line)}
+#ov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:color-mix(in srgb,var(--bg) 82%,transparent);border-radius:10px;text-align:center;padding:16px}
+#ov.on{display:flex}
+#ov h2{font-family:'Bricolage Grotesque',Inter,sans-serif;font-size:34px;margin:0}
+#ov p{margin:0;color:var(--mute)}
+.pad{display:none;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,56px);gap:8px;justify-content:center;margin-top:14px}
+.pad button{font-size:20px}
+.pad .u{grid-column:2}
+@media (pointer:coarse){.pad{display:grid}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:14px 0 0;font-size:14px;color:var(--mute)}
+.legend span::before{content:"";display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;background:var(--c)}
+.how{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);color:var(--mute);font-size:14px;line-height:1.6}
+.how b{color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+<h1>Maze Escape</h1>
+<p class="sub">Reach the exit before the guard reaches you. A new maze is generated every game, and the guard always knows the shortest way to you.</p>
+
+<div class="bar">
+  <label>Grid size: <span id="sz">15</span><input id="size" type="range" min="10" max="25" value="15"></label>
+  <label>Guard speed
+    <select id="speed"><option value="3">Slow</option><option value="2" selected>Normal</option><option value="1">Fast</option></select>
+  </label>
+  <label>Guard's route
+    <select id="route"><option value="0">Hidden</option><option value="1">Shown</option></select>
+  </label>
+  <button class="go" id="new">New maze</button>
+</div>
+
+<div class="stats"><div><b id="mv">0</b> moves</div><div><b id="wn">0</b> wins</div><div><b id="ls">0</b> losses</div></div>
+
+<div class="wrap" id="wrap">
+  <canvas id="c" aria-label="Maze game board"></canvas>
+  <div id="ov" role="alertdialog"><h2 id="ot"></h2><p id="om"></p><button class="go" id="again">Play again</button></div>
+</div>
+
+<div class="pad" aria-label="Touch controls">
+  <button class="u" data-d="0,-1" aria-label="Up">↑</button>
+  <button data-d="-1,0" aria-label="Left">←</button><button data-d="0,1" aria-label="Down">↓</button><button data-d="1,0" aria-label="Right">→</button>
+</div>
+
+<div class="legend"><span style="--c:var(--player)">You</span><span style="--c:var(--guard)">Guard</span><span style="--c:var(--exit)">Exit</span></div>
+
+<div class="how">
+<b>Controls:</b> arrow keys or WASD, or swipe on the board. <b>How the guard works:</b> every turn it runs a breadth-first search from its own cell to yours, then steps along that shortest path. Turn on "Guard's route" to see it. The maze is built with randomised depth-first search, then extra walls are removed so there is always more than one way around.
+</div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const cv=$('#c'),ctx=cv.getContext('2d');
+const D=[[0,-1],[0,1],[-1,0],[1,0]];
+let n,W,p,g,ex,turn,moves,over,wins=0,losses=0;
+
+function gen(n){
+  W=new Uint8Array(n*n).fill(1);
+  const id=(r,c)=>r*n+c;
+  W[id(1,1)]=0;
+  const st=[[1,1]];
+  while(st.length){
+    const [r,c]=st[st.length-1], opts=[];
+    for(const [dr,dc] of [[-2,0],[2,0],[0,-2],[0,2]]){
+      const a=r+dr,b=c+dc;
+      if(a>0&&a<n-1&&b>0&&b<n-1&&W[id(a,b)])opts.push([a,b,dr,dc]);
+    }
+    if(opts.length){
+      const [a,b,dr,dc]=opts[Math.random()*opts.length|0];
+      W[id(r+dr/2,c+dc/2)]=0;W[id(a,b)]=0;st.push([a,b]);
+    }else st.pop();
+  }
+  // knock out extra walls so there are loops (more than one route)
+  for(let i=0;i<n*n/4;i++){
+    const r=1+(Math.random()*(n-2)|0),c=1+(Math.random()*(n-2)|0);
+    if(W[id(r,c)]&&((!W[id(r-1,c)]&&!W[id(r+1,c)])||(!W[id(r,c-1)]&&!W[id(r,c+1)])))W[id(r,c)]=0;
+  }
+}
+
+// Breadth-first search: returns shortest path (array of cell ids) from a to b
+function bfs(a,b){
+  const prev=new Int32Array(n*n).fill(-2);prev[a]=-1;
+  const q=[a];
+  for(let i=0;i<q.length;i++){
+    const cur=q[i];if(cur===b)break;
+    const r=cur/n|0,c=cur%n;
+    for(const [dc,dr] of D){
+      const nx=(r+dr)*n+(c+dc);
+      if(!W[nx]&&prev[nx]===-2){prev[nx]=cur;q.push(nx);}
+    }
+  }
+  if(prev[b]===-2)return null;
+  const path=[];for(let x=b;x!==-1;x=prev[x])path.push(x);
+  return path.reverse();
+}
+
+function placeGuard(){
+  const route=bfs(p,ex),on=new Set(route),far=route.length>>1,pick=[];
+  const d=new Int32Array(n*n).fill(-1);d[p]=0;const q=[p];
+  for(let i=0;i<q.length;i++){
+    const cur=q[i],r=cur/n|0,c=cur%n;
+    for(const [dc,dr] of D){const nx=(r+dr)*n+c+dc;if(!W[nx]&&d[nx]<0){d[nx]=d[cur]+1;q.push(nx);}}
+  }
+  for(const cell of q)if(!on.has(cell)&&d[cell]>=far)pick.push(cell);
+  return pick.length?pick[Math.random()*pick.length|0]:q[q.length-1];
+}
+
+function start(){
+  const v=+$('#size').value;n=v%2?v:v+1;
+  gen(n);p=n+1;ex=(n-2)*n+(n-2);g=placeGuard();
+  turn=0;moves=0;over=false;$('#ov').classList.remove('on');
+  size();stats();draw();
+}
+
+function move(dc,dr){
+  if(over)return;
+  const r=p/n|0,c=p%n,nx=(r+dr)*n+c+dc;
+  if(W[nx])return;
+  p=nx;moves++;
+  if(p===ex)return end(true);
+  if(p===g)return end(false);
+  turn++;
+  if(turn%(+$('#speed').value)===0){
+    const path=bfs(g,p);
+    if(path&&path.length>1)g=path[1];
+    if(g===p)return end(false);
+  }
+  stats();draw();
+}
+
+function end(win){
+  over=true;win?wins++:losses++;stats();draw();
+  $('#ot').textContent=win?'You escaped':'Caught';
+  $('#om').textContent=win?`Out in ${moves} moves.`:`The guard got you after ${moves} moves.`;
+  $('#ov').classList.add('on');$('#again').focus();
+}
+
+function stats(){$('#mv').textContent=moves;$('#wn').textContent=wins;$('#ls').textContent=losses;}
+
+function size(){
+  const s=Math.min($('#wrap').clientWidth,640),dpr=window.devicePixelRatio||1;
+  cv.width=cv.height=Math.round(s*dpr);cv.style.height=s+'px';
+}
+
+function draw(){
+  const css=getComputedStyle(document.documentElement),col=k=>css.getPropertyValue(k).trim();
+  const s=cv.width/n;
+  ctx.fillStyle=col('--floor');ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle=col('--wall');
+  for(let i=0;i<n*n;i++)if(W[i]){const r=i/n|0,c=i%n;ctx.fillRect(c*s,r*s,s+.5,s+.5);}
+  const cx=i=>(i%n+.5)*s,cy=i=>((i/n|0)+.5)*s;
+  if($('#route').value==='1'&&!over){
+    const path=bfs(g,p);
+    if(path){ctx.fillStyle=col('--route');for(const i of path.slice(1,-1)){ctx.beginPath();ctx.arc(cx(i),cy(i),s*.14,0,7);ctx.fill();}}
+  }
+  ctx.fillStyle=col('--exit');ctx.fillRect(cx(ex)-s*.36,cy(ex)-s*.36,s*.72,s*.72);
+  ctx.fillStyle=col('--guard');ctx.beginPath();ctx.arc(cx(g),cy(g),s*.36,0,7);ctx.fill();
+  ctx.fillStyle=col('--floor');ctx.beginPath();ctx.arc(cx(g),cy(g),s*.14,0,7);ctx.fill();
+  ctx.fillStyle=col('--player');ctx.beginPath();ctx.arc(cx(p),cy(p),s*.34,0,7);ctx.fill();
+}
+
+const keys={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]};
+addEventListener('keydown',e=>{
+  if(['SELECT','INPUT','BUTTON'].includes(document.activeElement.tagName)&&e.key.startsWith('Arrow')===false&&e.key.length>1)return;
+  const k=keys[e.key.length===1?e.key.toLowerCase():e.key];
+  if(k&&document.activeElement.tagName!=='SELECT'&&document.activeElement.type!=='range'){e.preventDefault();move(...k);}
+});
+document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>move(...b.dataset.d.split(',').map(Number)));
+let t0;
+cv.addEventListener('touchstart',e=>{t0=e.touches[0];},{passive:true});
+cv.addEventListener('touchend',e=>{
+  if(!t0)return;const t=e.changedTouches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;
+  Math.abs(dx)>Math.abs(dy)?move(dx>0?1:-1,0):move(0,dy>0?1:-1);
+});
+$('#size').oninput=e=>{$('#sz').textContent=e.target.value;};
+$('#size').onchange=start;$('#new').onclick=start;$('#again').onclick=start;
+$('#route').onchange=draw;$('#speed').onchange=()=>{$('#speed').blur();};
+addEventListener('resize',()=>{size();draw();});
+start();
+</script>
+</body>
+</html>
